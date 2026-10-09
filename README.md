@@ -1,17 +1,171 @@
-Assignment Report: Jenkins CI/CD Pipeline Implementation1. ObjectiveTo design and implement an automated Declarative CI/CD pipeline using Jenkins for a Java Maven application hosted on GitHub, covering checkout, build, automated testing, packaging, and deployment.   2. Architecture & Pipeline WorkflowThe pipeline automates the software delivery lifecycle through the following workflow:   PlaintextGitHub Repo (Push/Commit)
-       │
-       ▼
-1. Checkout (Jenkins SCM)
-       │
-       ▼
-2. Build (mvn clean compile)
-       │
-       ▼
-3. Unit Test (mvn test & JUnit reporting)
-       │
-       ▼
-4. Package (mvn package -DskipTests)
-       │
-       ▼
-5. Deploy (Local deployment to /tmp/deployed-app.jar)
-3. Pipeline Stages BreakdownStageCommand / DirectivePurpose & ExplanationToolstools { jdk 'JDK-17'; maven 'Maven-3.9' }Injects the configured JDK 17 and Maven 3.9 paths dynamically into the execution PATH.   1. Checkout Codecheckout scmClones the latest commit from the GitHub repository (main branch).   2. Buildmvn clean compileCleans previous artifacts and compiles the Java source code (App.java).   3. Unit Testmvn test & junit '**/target/surefire-reports/*.xml'Executes automated unit tests (AppTest.java) and publishes JUnit visual test reports.   4. Packagemvn package -DskipTestsPackages the compiled application into an executable JAR file inside the target/ directory.   5. Deploycopy /Y target\*.jar C:\tmp\deployed-app.jarSimulates target server deployment by copying the generated artifact to the destination directory.   Post Actionspost { success { ... } failure { ... } }Displays notifications depending on whether the pipeline succeeded or encountered an error.   4. Technical Challenges & ResolutionsPlatform Compatibility: The initial pipeline configuration used Unix shell commands (sh), which failed on Windows with a CreateProcess error=2 (cannot run program "sh"). This was resolved by transitioning the commands to Windows batch scripts (bat).   Local Tool Binding: Automatically installed JDKs were not directly available via the controller interface; configuring the exact local JDK 17 home directory (C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot) ensured seamless integration with Maven.   5. Submission Checklist (Screenshots Attached)[x] GitHub Repository: Showing directory structure (pom.xml, Jenkinsfile, and src/).   [x] Global Tools Configuration: JDK-17 and Maven-3.9 saved under Jenkins Tools.   [x] Jenkins Stage View: Green execution pipeline for all 5 stages on Build #3.   [x] Test Results Trend: Graph and report confirming com.example.AppTest passed.   [x] Deployment Verification: Output proving C:\tmp\deployed-app.jar was created. 
+# Java Maven Jenkins CI/CD Pipeline
+
+An end-to-end automated Continuous Integration and Continuous Deployment (CI/CD) pipeline built with **Jenkins Declarative Pipeline**, **GitHub**, **Apache Maven**, and **Java 17**[cite: 1, 3].
+
+---
+
+## Architecture & Workflow
+
+```text
+GitHub Repo (Push/Commit)
+         │
+         ▼
+ 1. Checkout Code (SCM)
+         │
+         ▼
+ 2. Build (mvn clean compile)
+         │
+         ▼
+ 3. Unit Test (mvn test + JUnit Reporting)
+         │
+         ▼
+ 4. Package (mvn package -DskipTests)
+         │
+         ▼
+ 5. Deploy (Local Destination / Artifact Store)
+```[cite: 1, 3]
+
+---
+
+## Project Structure
+
+```text
+my-java-app/
+├── pom.xml
+├── Jenkinsfile
+└── src/
+    ├── main/
+    │   └── java/
+    │       └── com/
+    │           └── example/
+    │               └── App.java
+    └── test/
+        └── java/
+            └── com/
+                └── example/
+                    └── AppTest.java
+```[cite: 1, 3]
+
+---
+
+## Prerequisites & Tool Configuration
+
+### 1. Global Tool Configuration in Jenkins
+Navigate to **Manage Jenkins** > **Tools** and configure the runtime environments[cite: 2]:
+
+* **JDK Installation**:
+  * **Name**: `JDK-17`[cite: 2]
+  * **JAVA_HOME**: Local JDK path (e.g., `C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot`)[cite: 2]
+* **Maven Installation**:
+  * **Name**: `Maven-3.9`[cite: 2]
+  * **Install automatically**: Checked (Version: Apache 3.9.x)[cite: 2]
+* **Git Installation**:
+  * **Name**: `Default`[cite: 6, 7]
+  * **Path to Git executable**: `git` (or system Git path)
+
+---
+
+## Jenkinsfile Implementation
+
+```groovy
+pipeline {
+    agent any
+
+    tools {
+        maven 'Maven-3.9'
+        jdk 'JDK-17'
+    }
+
+    stages {
+        stage('1. Checkout Code') {
+            steps {
+                echo 'Fetching source code from GitHub...'
+                checkout scm
+            }
+        }
+
+        stage('2. Build') {
+            steps {
+                echo 'Compiling the Java application...'
+                bat 'mvn clean compile'
+            }
+        }
+
+        stage('3. Unit Test') {
+            steps {
+                echo 'Running unit tests...'
+                bat 'mvn test'
+            }
+            post {
+                always {
+                    junit '**/target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        stage('4. Package') {
+            steps {
+                echo 'Packaging application into JAR/WAR...'
+                bat 'mvn package -DskipTests'
+            }
+        }
+
+        stage('5. Deploy') {
+            steps {
+                echo 'Deploying application artifact...'
+                bat '''
+                    echo Deploying target file to destination server...
+                    if not exist C:\\tmp mkdir C:\\tmp
+                    copy /Y target\\*.jar C:\\tmp\\deployed-app.jar || exit 0
+                    echo Deployment completed successfully.
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check the logs for details.'
+        }
+    }
+}
+```[cite: 3, 4]
+
+> **Note**: For Linux-based Jenkins nodes or agents, change the `bat` execution directives to `sh` and adjust path separators accordingly[cite: 3].
+
+---
+
+## Pipeline Stages Breakdown
+
+| Stage | Command / Directive | Description |
+| :--- | :--- | :--- |
+| **1. Checkout Code** | `checkout scm` | Clones the latest commit from the configured repository branch (`*/main`)[cite: 3, 4, 5]. |
+| **2. Build** | `mvn clean compile` | Cleans previous build artifacts and compiles the source code into bytecode[cite: 1, 3]. |
+| **3. Unit Test** | `mvn test` | Executes unit test suites and parses XML outputs via `junit` for test reports[cite: 3, 5]. |
+| **4. Package** | `mvn package -DskipTests` | Packages the application into an executable `.jar` file under the `target/` directory[cite: 3]. |
+| **5. Deploy** | Windows file copy command | Copies the packaged JAR file to `C:\tmp\deployed-app.jar` as a target server deployment[cite: 3]. |
+
+---
+
+## Jenkins Job Setup
+
+1. Go to **Jenkins Dashboard** > **New Item**[cite: 4].
+2. Name the project `java-mvn-cicd-pipeline` and choose **Pipeline**[cite: 4].
+3. In the **Pipeline** section[cite: 4]:
+   * **Definition**: `Pipeline script from SCM`[cite: 4]
+   * **SCM**: `Git`[cite: 4]
+   * **Repository URL**: `https://github.com/siddhidivate14-ship-it/my-java-app.git`[cite: 4]
+   * **Branch Specifier**: `*/main`[cite: 4]
+   * **Script Path**: `Jenkinsfile`[cite: 4]
+4. Click **Save** and select **Build Now** to trigger the build[cite: 2, 4].
+
+---
+
+## Verification & Results
+
+* **Stage View**: All 5 execution stages (`Checkout`, `Build`, `Unit Test`, `Package`, `Deploy`) passed with green status[cite: 3, 4].
+* **Automated Test Results**: JUnit test results captured and tracked under **Test Result Trend** with zero failures[cite: 4, 5, 11].
+* **Deployment Output**: Artifact successfully verified at destination path `C:\tmp\deployed-app.jar`[cite: 3].
